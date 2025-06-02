@@ -67,6 +67,9 @@ fn main() {
         color: Color::default(),
     };
 
+    let mut zoom_pow = 0.0;
+    let mut pan = Vector2::zero();
+
     while !rl.window_should_close() {
         rl.poll_input_events();
 
@@ -75,46 +78,59 @@ fn main() {
         }
 
         let mouse_pos = rl.get_mouse_position();
-        let is_on_canvas = canvas_rec.check_collision_point_rec(mouse_pos);
 
         // Zoom + pan
         {
             let scroll = rl.get_mouse_wheel_move();
 
-            if rl.is_key_down(KEY_LEFT_CONTROL) || rl.is_key_down(KEY_RIGHT_CONTROL) {
-                // zoom
-
-            } else if rl.is_key_down(KEY_LEFT_SHIFT) || rl.is_key_down(KEY_RIGHT_SHIFT) {
-                // horizontal pan
-
-            } else {
-                // vertical pan
-
+            if scroll != 0.0 {
+                if rl.is_key_down(KEY_LEFT_CONTROL) || rl.is_key_down(KEY_RIGHT_CONTROL) {
+                    // zoom
+                    zoom_pow += scroll;
+                } else if rl.is_key_down(KEY_LEFT_SHIFT) || rl.is_key_down(KEY_RIGHT_SHIFT) {
+                    // horizontal pan
+                    pan.x += scroll * 10.0;
+                } else {
+                    // vertical pan
+                    pan.y += scroll * 10.0;
+                }
+                is_frame_updated = true;
             }
         }
 
+        let zoom = 2.0f32.powi(zoom_pow as i32);
+
+        let canvas_rec = Rectangle {
+            x: pan.x * zoom,
+            y: pan.y * zoom,
+            width: canvas_rec.width * zoom,
+            height: canvas_rec.height * zoom,
+        };
+
+        let pen_pos = (mouse_pos - pan * zoom) / zoom;
+
         // Draw
         {
-            let begin_drawing = is_on_canvas && rl.is_mouse_button_pressed(MOUSE_BUTTON_LEFT);
-
             if rl.is_mouse_button_released(MOUSE_BUTTON_LEFT) {
                 pen_pos_prev = None;
             }
 
-            if !is_erasing && let Some(pos_prev) = &mut pen_pos_prev && pos_prev != &mouse_pos {
+            if !is_erasing && let Some(pos_prev) = &mut pen_pos_prev && pos_prev != &pen_pos {
                 {
                     let mut d = rl.begin_texture_mode(&thread, &mut canvas);
-                    d.draw_line_ex(*pos_prev, mouse_pos, 2.0*brush.radius, Color::WHITE);
-                    d.draw_circle_v(mouse_pos, brush.radius, Color::WHITE);
+                    d.draw_line_ex(*pos_prev, pen_pos, 2.0*brush.radius, Color::WHITE);
+                    d.draw_circle_v(pen_pos, brush.radius, Color::WHITE);
                 }
-                *pos_prev = mouse_pos;
+                *pos_prev = pen_pos;
                 is_frame_updated = true;
-            } else if begin_drawing {
-                pen_pos_prev = Some(mouse_pos);
+            }
+
+            if rl.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) {
+                pen_pos_prev = Some(pen_pos);
                 is_erasing = false;
                 {
                     let mut d = rl.begin_texture_mode(&thread, &mut canvas);
-                    d.draw_circle_v(mouse_pos, 5.0, Color::WHITE);
+                    d.draw_circle_v(pen_pos, 5.0, Color::WHITE);
                 }
                 is_frame_updated = true;
             }
@@ -122,29 +138,29 @@ fn main() {
 
         // Erase
         {
-            let begin_drawing = is_on_canvas && rl.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT);
-
             if rl.is_mouse_button_released(MOUSE_BUTTON_RIGHT) {
                 pen_pos_prev = None;
             }
 
-            if is_erasing && let Some(pos_prev) = &mut pen_pos_prev && pos_prev != &mouse_pos {
+            if is_erasing && let Some(pos_prev) = &mut pen_pos_prev && pos_prev != &pen_pos {
                 let mut d = rl.begin_texture_mode(&thread, &mut canvas);
                 {
                     let mut d = d.begin_blend_mode(BLEND_CUSTOM_SEPARATE);
-                    d.draw_line_ex(*pos_prev, mouse_pos, 2.0*brush.radius, Color::BLANK);
-                    d.draw_circle_v(mouse_pos, brush.radius, Color::BLANK);
+                    d.draw_line_ex(*pos_prev, pen_pos, 2.0*brush.radius, Color::BLANK);
+                    d.draw_circle_v(pen_pos, brush.radius, Color::BLANK);
                 }
-                *pos_prev = mouse_pos;
+                *pos_prev = pen_pos;
                 is_frame_updated = true;
-            } else if begin_drawing {
-                pen_pos_prev = Some(mouse_pos);
+            }
+
+            if rl.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) {
+                pen_pos_prev = Some(pen_pos);
                 is_erasing = true;
                 {
                     let mut d = rl.begin_texture_mode(&thread, &mut canvas);
                     {
                         let mut d = d.begin_blend_mode(BLEND_CUSTOM_SEPARATE);
-                        d.draw_circle_v(mouse_pos, 5.0, Color::BLANK);
+                        d.draw_circle_v(pen_pos, 5.0, Color::BLANK);
                     }
                 }
                 is_frame_updated = true;
