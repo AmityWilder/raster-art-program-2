@@ -56,14 +56,14 @@ fn main() {
         ffi::EnableEventWaiting();
     }
 
-    let mut canvas_rec = Rectangle::new(0.0, 0.0, 720.0, 480.0);
+    let canvas_rec = Rectangle::new(0.0, 0.0, 720.0, 480.0);
     let mut canvas = rl.load_render_texture(&thread, canvas_rec.width as u32, canvas_rec.height as u32).unwrap();
     let mut pen_pos_prev = None;
     let mut is_frame_updated = true;
     let mut is_erasing = false;
 
     let mut brush = Brush {
-        radius: 5.0,
+        radius: 0.5,
         color: Color::default(),
     };
 
@@ -86,10 +86,13 @@ fn main() {
             if scroll != 0.0 {
                 if rl.is_key_down(KEY_LEFT_CONTROL) || rl.is_key_down(KEY_RIGHT_CONTROL) {
                     // zoom
-                    zoom_pow += scroll;
+                    zoom_pow = (zoom_pow + scroll).clamp(-4.0, 4.0);
                 } else if rl.is_key_down(KEY_LEFT_SHIFT) || rl.is_key_down(KEY_RIGHT_SHIFT) {
                     // horizontal pan
                     pan.x += scroll * 10.0;
+                } else if rl.is_key_down(KEY_LEFT_ALT) || rl.is_key_down(KEY_RIGHT_ALT) {
+                    // pen size
+                    brush.radius = (brush.radius + scroll * 0.5).max(0.5);
                 } else {
                     // vertical pan
                     pan.y += scroll * 10.0;
@@ -130,7 +133,7 @@ fn main() {
                 is_erasing = false;
                 {
                     let mut d = rl.begin_texture_mode(&thread, &mut canvas);
-                    d.draw_circle_v(pen_pos, 5.0, Color::WHITE);
+                    d.draw_circle_v(pen_pos, brush.radius, Color::WHITE);
                 }
                 is_frame_updated = true;
             }
@@ -160,7 +163,7 @@ fn main() {
                     let mut d = rl.begin_texture_mode(&thread, &mut canvas);
                     {
                         let mut d = d.begin_blend_mode(BLEND_CUSTOM_SEPARATE);
-                        d.draw_circle_v(pen_pos, 5.0, Color::BLANK);
+                        d.draw_circle_v(pen_pos, brush.radius, Color::BLANK);
                     }
                 }
                 is_frame_updated = true;
@@ -176,9 +179,10 @@ fn main() {
                 d.draw_rectangle_rec(canvas_rec, Color::new(42, 42, 42, 255));
 
                 draw_texture_custom(&mut d, &canvas, &canvas_rec);
+                d.draw_text(&(brush.radius * 2.0).to_string(), 0, 0, 10, Color::MAGENTA);
 
                 // Debug update frequency
-                d.draw_text(&d.get_time().to_string(), 0, 0, 10, Color::MAGENTA);
+                d.draw_text(&d.get_time().to_string(), 0, 10, 10, Color::MAGENTA);
             }
 
             rl.swap_screen_buffer();
