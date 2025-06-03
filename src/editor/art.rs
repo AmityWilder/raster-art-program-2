@@ -1,4 +1,3 @@
-use std::fmt::Write;
 use raylib::prelude::*;
 use crate::{brush::Brush, draw_texture_custom, frame::Frame};
 
@@ -8,7 +7,6 @@ pub struct ArtEditor {
     pen_pos_prev: Option<(Vector2, Option<Vector2>)>,
     zoom_pow: f32,
     frac_pan: Vector2,
-    last_redraw_str: String,
 }
 
 impl ArtEditor {
@@ -19,7 +17,6 @@ impl ArtEditor {
             pen_pos_prev: None,
             zoom_pow: 0.0,
             frac_pan: Vector2::zero(),
-            last_redraw_str: "last redraw: 0.0000000".to_string(),
         }
     }
 
@@ -85,7 +82,7 @@ impl ArtEditor {
             y: (mouse_pos.y*zoom_inv - self.frac_pan.y).round(),
         };
 
-        // Draw
+        // Paint
         {
             if  rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) ||
                 rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_RIGHT)
@@ -113,11 +110,8 @@ impl ArtEditor {
             }
         }
 
-        // Draw canvas
+        // Render
         if self.is_canvas_dirty {
-            self.last_redraw_str.truncate(const { "last redraw: ".len() });
-            _ = write!(self.last_redraw_str, "{}", rl.get_time());
-
             let pan = Vector2 {
                 x: self.frac_pan.x.round(),
                 y: self.frac_pan.y.round(),
@@ -135,7 +129,7 @@ impl ArtEditor {
                 d.clear_background(Color::BLACK);
                 d.draw_rectangle_rec(canvas_rec, Color::new(42, 42, 42, 255));
 
-                draw_texture_custom(&mut d, &self.canvas, &canvas_rec);
+                draw_texture_custom(&mut d, &self.canvas, &canvas_rec, Color::WHITE);
             }
             self.is_canvas_dirty = false;
         }

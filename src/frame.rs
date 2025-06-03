@@ -76,7 +76,7 @@ impl Frame {
             width: self.buffer.texture.width as f32,
             height: self.buffer.texture.height as f32,
         };
-        draw_texture_custom(d, &self.buffer, &rec);
+        draw_texture_custom(d, &self.buffer, &rec, Color::WHITE);
         self.is_dirty = false;
     }
 }

@@ -8,7 +8,7 @@ use brush::Brush;
 use frame::Frame;
 use editor::{Editor, art::ArtEditor, color::ColorEditor};
 
-pub fn draw_texture_custom(_d: &mut impl RaylibDraw, texture: impl AsRef<ffi::Texture>, rec: &Rectangle) {
+pub fn draw_texture_custom(_d: &mut impl RaylibDraw, texture: impl AsRef<ffi::Texture>, rec: &Rectangle, tint: Color) {
     use ffi::*;
 
     unsafe {
@@ -20,7 +20,7 @@ pub fn draw_texture_custom(_d: &mut impl RaylibDraw, texture: impl AsRef<ffi::Te
         rlSetTexture(texture.as_ref().id);
         rlBegin(RL_QUADS as i32);
         {
-            rlColor4ub(255, 255, 255, 255); // Tint
+            rlColor4ub(tint.r, tint.g, tint.b, tint.a); // Tint
             rlNormal3f(0.0, 0.0, 1.0);
 
             // Top left
@@ -56,10 +56,10 @@ fn main() {
         ffi::EnableEventWaiting();
     }
 
-    let mut brush = Brush::new(&mut rl, &thread, 0.5, Color::AQUAMARINE);
+    let mut brush = Brush::new(&mut rl, &thread, 0.5, Color::WHITE);
 
     let mut art_editor = ArtEditor::new(rl.load_render_texture(&thread, 720, 480).unwrap());
-    let mut color_editor = ColorEditor::new(&mut rl, &thread);
+    let mut color_editor = ColorEditor::new(&mut rl, &thread, &brush);
     let mut current_editor = Editor::Art;
     let mut frame = Frame::new(&mut rl, &thread);
 
