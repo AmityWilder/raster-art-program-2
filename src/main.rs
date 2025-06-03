@@ -56,10 +56,10 @@ fn main() {
         ffi::EnableEventWaiting();
     }
 
-    let mut brush = Brush::new(&mut rl, &thread, 0.5, Color::WHITE);
+    let mut brush = Brush::new(&mut rl, &thread, 0.5, Color::AQUAMARINE);
 
     let mut art_editor = ArtEditor::new(rl.load_render_texture(&thread, 720, 480).unwrap());
-    let mut color_editor = ColorEditor::new();
+    let mut color_editor = ColorEditor::new(&mut rl, &thread);
     let mut current_editor = Editor::Art;
     let mut frame = Frame::new(&mut rl, &thread);
 
