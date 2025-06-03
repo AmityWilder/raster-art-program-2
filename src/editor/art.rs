@@ -5,7 +5,7 @@ use crate::{brush::Brush, draw_texture_custom, frame::Frame};
 pub struct ArtEditor {
     canvas: RenderTexture2D,
     is_canvas_dirty: bool,
-    pen_pos_prev: Option<Vector2>,
+    pen_pos_prev: Option<(Vector2, Option<Vector2>)>,
     zoom_pow: f32,
     frac_pan: Vector2,
     last_redraw_str: String,
@@ -87,21 +87,29 @@ impl ArtEditor {
 
         // Draw
         {
-            if rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) {
+            if  rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) ||
+                rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_RIGHT)
+            {
                 self.pen_pos_prev = None;
             }
 
-            if let Some(pos_prev) = &mut self.pen_pos_prev && pos_prev != &pen_pos {
-                brush.draw_line(&mut rl.begin_texture_mode(&thread, &mut self.canvas), std::mem::replace(pos_prev, pen_pos), pen_pos);
+            if let Some((pos_prev, pos_pprev)) = &mut self.pen_pos_prev && pos_prev != &pen_pos {
+                let mut d = rl.begin_texture_mode(&thread, &mut self.canvas);
+                let pos_pprev = std::mem::replace(pos_pprev, Some(*pos_prev));
+                let pos_prev = std::mem::replace(pos_prev, pen_pos);
+                brush.paint(&mut d, Some((pos_prev, pos_pprev)), pen_pos);
                 self.is_canvas_dirty = true;
             }
 
-            let is_right_pressed = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_RIGHT);
-            if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) || is_right_pressed {
-                self.pen_pos_prev = Some(pen_pos);
-                brush.is_erasing = is_right_pressed;
-                brush.draw(&mut rl.begin_texture_mode(&thread, &mut self.canvas), pen_pos);
-                self.is_canvas_dirty = true;
+            if self.pen_pos_prev.is_none() {
+                let is_right_pressed = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_RIGHT);
+                if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) || is_right_pressed {
+                    self.pen_pos_prev = Some((pen_pos, None));
+                    brush.is_erasing = is_right_pressed;
+                    let mut d = rl.begin_texture_mode(&thread, &mut self.canvas);
+                    brush.paint(&mut d, None, pen_pos);
+                    self.is_canvas_dirty = true;
+                }
             }
         }
 
