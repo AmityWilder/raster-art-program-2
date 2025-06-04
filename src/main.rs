@@ -68,6 +68,7 @@ fn main() {
 
         if rl.is_window_resized() {
             frame.resize(&mut rl, &thread);
+            art_editor.mark_dirty();
         }
 
         if rl.is_key_pressed(KeyboardKey::KEY_C) {
