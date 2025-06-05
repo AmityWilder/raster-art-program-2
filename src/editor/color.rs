@@ -41,41 +41,59 @@ const fn rgb_from_oklab(l: f32, a: f32, b: f32) -> [f32; 3] {
     ]
 }
 
-fn gui_color_triangle<D: RaylibDraw>(_d: &mut D, center: Vector2, radius: f32, color: Color) -> Color {
+fn gui_color_picker_custom<D: RaylibDraw>(d: &mut D, bounds: Rectangle, color: Color) -> Color {
     use ffi::*;
     use raylib::prelude::{Color, Vector2};
 
-    let hue = color.color_to_hsv().x;
-    let color_max = Color::color_from_hsv(hue, 1.0, 1.0);
-
+    let mouse_pos;
+    let is_mouse_down;
     unsafe {
-        let tex_shapes = GetShapesTexture();
-        rlSetTexture(tex_shapes.id);
-        let shape_rect = GetShapesTextureRectangle();
-        rlBegin(RL_TRIANGLES as i32);
-            rlColor4ub(color_max.r, color_max.g, color_max.b, 255);
-            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, (shape_rect.y + shape_rect.height)/tex_shapes.height as f32);
-            rlVertex2f(center.x + hue.to_radians().cos()*radius, center.y + hue.to_radians().sin()*radius);
-
-            rlColor4ub(255, 255, 255, 255);
-            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
-            rlVertex2f(center.x + (hue + 240.0).to_radians().cos()*radius, center.y + (hue + 240.0).to_radians().sin()*radius);
-
-            rlColor4ub(0, 0, 0, 255);
-            rlTexCoord2f((shape_rect.x + shape_rect.width)/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
-            rlVertex2f(center.x + (hue + 120.0).to_radians().cos()*radius, center.y + (hue + 120.0).to_radians().sin()*radius);
-        rlEnd();
-        rlSetTexture(0);
+        mouse_pos = Vector2::from(GetMousePosition());
+        is_mouse_down = IsMouseButtonDown(MouseButton::MOUSE_BUTTON_LEFT as i32);
     }
 
-    color // todo
-}
+    let thick = 20.0;
+    let half_width = 0.5*bounds.width;
+    let half_height = 0.5*bounds.height;
+    let center = Vector2::new(bounds.x + half_width, bounds.y + half_height);
+    let outer_radius = half_width.min(half_height);
+    let inner_radius = outer_radius - thick;
+    let triangle_radius = inner_radius - 5.0;
 
-fn gui_hue_wheel_circle<D: RaylibDraw>(_d: &mut D, center: Vector2, inner_radius: f32, outer_radius: f32, hue: f32) -> f32 {
-    use ffi::*;
-    use raylib::prelude::{Color, Vector2};
+    let is_in_hue_wheel = (inner_radius*inner_radius..=outer_radius*outer_radius)
+        .contains(&(mouse_pos - center).length_sqr());
+
+    let cur_hsv = color.color_to_hsv();
+
+    let hue = if is_mouse_down && is_in_hue_wheel {
+        center.angle_to(mouse_pos).to_degrees()
+    } else {
+        cur_hsv.x
+    };
+
+    let p0 = center + Vector2::new( hue         .to_radians().cos()*triangle_radius,  hue         .to_radians().sin()*triangle_radius);
+    let p1 = center + Vector2::new((hue + 240.0).to_radians().cos()*triangle_radius, (hue + 240.0).to_radians().sin()*triangle_radius);
+    let p2 = center + Vector2::new((hue + 120.0).to_radians().cos()*triangle_radius, (hue + 120.0).to_radians().sin()*triangle_radius);
+
+    let is_in_triangle = !is_in_hue_wheel && unsafe { CheckCollisionPointTriangle(mouse_pos.into(), p0.into(), p1.into(), p2.into()) };
+    let result = if is_mouse_down && is_in_triangle {
+        let sat = mouse_pos.distance_to(p1)/p1.distance_to(p0);
+        let val = mouse_pos.distance_to(p2)/p2.distance_to(p0);
+        Color::color_from_hsv(hue, sat, val)
+    } else {
+        Color::color_from_hsv(hue, cur_hsv.y, cur_hsv.z)
+    };
+
+    let color_max = Color::color_from_hsv(hue, 1.0, 1.0);
+
+    // hue line
+
+    let hue_v = Vector2::new(hue.to_radians().cos(), hue.to_radians().sin());
+    d.draw_line_ex(center + hue_v*(inner_radius - 4.0), center + hue_v*(outer_radius + 4.0), 4.0, Color::SLATEBLUE);
 
     unsafe {
+        // circle
+
         let tex_shapes = GetShapesTexture();
         rlSetTexture(tex_shapes.id);
         let shape_rect = GetShapesTextureRectangle();
@@ -109,22 +127,29 @@ fn gui_hue_wheel_circle<D: RaylibDraw>(_d: &mut D, center: Vector2, inner_radius
         }
         rlEnd();
         rlSetTexture(0);
+
+        // triangle
+
+        let tex_shapes = GetShapesTexture();
+        rlSetTexture(tex_shapes.id);
+        let shape_rect = GetShapesTextureRectangle();
+        rlBegin(RL_TRIANGLES as i32);
+            rlColor4ub(color_max.r, color_max.g, color_max.b, 255);
+            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, (shape_rect.y + shape_rect.height)/tex_shapes.height as f32);
+            rlVertex2f(p0.x, p0.y);
+
+            rlColor4ub(255, 255, 255, 255);
+            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
+            rlVertex2f(p1.x, p1.y);
+
+            rlColor4ub(0, 0, 0, 255);
+            rlTexCoord2f((shape_rect.x + shape_rect.width)/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
+            rlVertex2f(p2.x, p2.y);
+        rlEnd();
+        rlSetTexture(0);
     }
 
-    hue // todo
-}
-
-fn gui_color_picker_custom<D: RaylibDraw>(d: &mut D, bounds: Rectangle, color: Color) -> Color {
-    let thick = 20.0;
-    let half_width = 0.5*bounds.width;
-    let half_height = 0.5*bounds.height;
-    let center = Vector2::new(bounds.x + half_width, bounds.y + half_height);
-    let outer_radius = half_width.min(half_height);
-    let inner_radius = outer_radius - thick;
-    let triangle_radius = inner_radius - 5.0;
-    let hue = color.color_to_hsv().x;
-    _ = gui_hue_wheel_circle(d, center, inner_radius, outer_radius, hue);
-    gui_color_triangle(d, center, triangle_radius, color)
+    result
 }
 
 pub struct ColorEditor {}
