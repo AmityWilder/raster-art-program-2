@@ -41,9 +41,11 @@ const fn rgb_from_oklab(l: f32, a: f32, b: f32) -> [f32; 3] {
     ]
 }
 
-fn gui_color_picker_custom<D: RaylibDraw>(d: &mut D, bounds: Rectangle, color: Color) -> Color {
+fn gui_color_picker_custom<D: RaylibDraw>(d: &mut D, bounds: Rectangle, color_hsv: Vector3) -> Vector3 {
     use ffi::*;
-    use raylib::prelude::{Color, Vector2};
+    use raylib::prelude::{Color, Vector2, Vector3, Rectangle};
+
+    let root = Vector2::new(bounds.x, bounds.y);
 
     let mouse_pos;
     let is_mouse_down;
@@ -60,29 +62,31 @@ fn gui_color_picker_custom<D: RaylibDraw>(d: &mut D, bounds: Rectangle, color: C
     let inner_radius = outer_radius - thick;
     let triangle_radius = inner_radius - 5.0;
 
-    let is_in_hue_wheel = (inner_radius*inner_radius..=outer_radius*outer_radius)
-        .contains(&(mouse_pos - center).length_sqr());
-
-    let cur_hsv = color.color_to_hsv();
+    let is_in_hue_wheel = (mouse_pos - center).length_sqr() >= inner_radius*inner_radius;
 
     let hue = if is_mouse_down && is_in_hue_wheel {
         center.angle_to(mouse_pos).to_degrees()
     } else {
-        cur_hsv.x
+        color_hsv.x
     };
 
-    let p0 = center + Vector2::new( hue         .to_radians().cos()*triangle_radius,  hue         .to_radians().sin()*triangle_radius);
-    let p1 = center + Vector2::new((hue + 240.0).to_radians().cos()*triangle_radius, (hue + 240.0).to_radians().sin()*triangle_radius);
-    let p2 = center + Vector2::new((hue + 120.0).to_radians().cos()*triangle_radius, (hue + 120.0).to_radians().sin()*triangle_radius);
+    let color_pos = center + Vector2::new( hue         .to_radians().cos()*triangle_radius,  hue         .to_radians().sin()*triangle_radius);
+    let white_pos = center + Vector2::new((hue + 120.0).to_radians().cos()*triangle_radius, (hue + 120.0).to_radians().sin()*triangle_radius);
+    let black_pos = center + Vector2::new((hue + 240.0).to_radians().cos()*triangle_radius, (hue + 240.0).to_radians().sin()*triangle_radius);
 
-    let is_in_triangle = !is_in_hue_wheel && unsafe { CheckCollisionPointTriangle(mouse_pos.into(), p0.into(), p1.into(), p2.into()) };
-    let result = if is_mouse_down && is_in_triangle {
-        let sat = mouse_pos.distance_to(p1)/p1.distance_to(p0);
-        let val = mouse_pos.distance_to(p2)/p2.distance_to(p0);
-        Color::color_from_hsv(hue, sat, val)
-    } else {
-        Color::color_from_hsv(hue, cur_hsv.y, cur_hsv.z)
-    };
+    let (val, sat) = (|s: Vector2, p0: Vector2, p1: Vector2, p2: Vector2| {
+        if is_mouse_down && !is_in_hue_wheel {
+            let u = (
+                ((p0.x - s.x)*(p0.y - p1.y) - (p0.y - s.y)*(p0.x - p1.x))/
+                ((p0.x - s.x)*(p1.y - p2.y) - (p0.y - s.y)*(p1.x - p2.x))
+            ).clamp(-1.0, 0.0);
+            let p = p1 - (p2 - p1)*u;
+            let a = (s.distance_to(p0)/p .distance_to(p0)).clamp(0.0, 1.0);
+            let b = (p.distance_to(p1)/p2.distance_to(p1)).clamp(0.0, 1.0);
+            return (a, b);
+        }
+        (color_hsv.z, color_hsv.y)
+    })(mouse_pos, black_pos, white_pos, color_pos);
 
     let color_max = Color::color_from_hsv(hue, 1.0, 1.0);
 
@@ -136,23 +140,34 @@ fn gui_color_picker_custom<D: RaylibDraw>(d: &mut D, bounds: Rectangle, color: C
         rlBegin(RL_TRIANGLES as i32);
             rlColor4ub(color_max.r, color_max.g, color_max.b, 255);
             rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, (shape_rect.y + shape_rect.height)/tex_shapes.height as f32);
-            rlVertex2f(p0.x, p0.y);
-
-            rlColor4ub(255, 255, 255, 255);
-            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
-            rlVertex2f(p1.x, p1.y);
+            rlVertex2f(color_pos.x, color_pos.y);
 
             rlColor4ub(0, 0, 0, 255);
             rlTexCoord2f((shape_rect.x + shape_rect.width)/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
-            rlVertex2f(p2.x, p2.y);
+            rlVertex2f(black_pos.x, black_pos.y);
+
+            rlColor4ub(255, 255, 255, 255);
+            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
+            rlVertex2f(white_pos.x, white_pos.y);
         rlEnd();
         rlSetTexture(0);
     }
 
-    result
+    // sample
+    (|p0: Vector2, p1: Vector2, p2: Vector2, a: f32, b: f32| {
+        let sample_radius = 3.0;
+        let p = p1 + (p2 - p1)*b;
+        let s = p0 + (p - p0)*a;
+        d.draw_rectangle_rec(Rectangle::new(s.x - sample_radius - 1.0, s.y - sample_radius - 1.0, (sample_radius + 1.0)*2.0, (sample_radius + 1.0)*2.0), Color::SLATEBLUE);
+        d.draw_rectangle_rec(Rectangle::new(s.x - sample_radius, s.y - sample_radius, sample_radius*2.0, sample_radius*2.0), Color::color_from_hsv(hue, sat, val));
+    })(black_pos, white_pos, color_pos, val, sat);
+
+    Vector3::new(hue, sat, val)
 }
 
-pub struct ColorEditor {}
+pub struct ColorEditor {
+    color_hsv: Vector3,
+}
 
 impl ColorEditor {
     fn generate_tex<D: RaylibDraw>(d: &mut D, sat: f32) {
@@ -173,15 +188,18 @@ impl ColorEditor {
             Self::generate_tex(&mut d, sat);
         }
 
-        Self {}
+        Self {
+            color_hsv: brush.color.color_to_hsv(),
+        }
     }
 
     pub fn update(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread, brush: &mut Brush, frame: &mut Frame) {
         {
             let mut d = frame.begin_drawing(rl, thread);
             d.clear_background(Color::BLACK);
-            let bounds = Rectangle::new(5.0, 5.0, 255.0, 255.0);
-            brush.color = gui_color_picker_custom(&mut d, bounds, brush.color);
+            let bounds = Rectangle::new(25.0, 25.0, 255.0, 255.0);
+            self.color_hsv = gui_color_picker_custom(&mut d, bounds, self.color_hsv);
+            brush.color = Color::color_from_hsv(self.color_hsv.x, self.color_hsv.y, self.color_hsv.z);
             d.draw_rectangle(300, 5, 34, 34, Color::GRAY);
             d.draw_rectangle(301, 6, 32, 32, brush.color);
         }
