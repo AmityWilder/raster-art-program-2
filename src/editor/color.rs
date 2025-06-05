@@ -1,4 +1,5 @@
 use raylib::prelude::*;
+use amygui::prelude::*;
 use crate::{brush::Brush, frame::Frame};
 
 const _FRAC_1_255: f32 = 1.0/255.0;
@@ -179,7 +180,8 @@ impl ColorEditor {
             let mut d = frame.begin_drawing(rl, thread);
             d.clear_background(Color::BLACK);
             let bounds = Rectangle::new(25.0, 25.0, 255.0, 255.0);
-            self.color_hsv = gui_color_picker_custom(&mut d, bounds, self.color_hsv);
+            // self.color_hsv = gui_color_picker_custom(&mut d, bounds, self.color_hsv);
+            self.color_hsv = d.gui_color_picker_hsv_wheel(bounds, self.color_hsv);
             brush.color = Color::color_from_hsv(self.color_hsv.x, self.color_hsv.y, self.color_hsv.z);
             d.draw_rectangle(300, 5, 34, 34, Color::GRAY);
             d.draw_rectangle(301, 6, 32, 32, brush.color);

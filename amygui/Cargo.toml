@@ -1,11 +1,14 @@
-[workspace]
-members = ["amygui"]
-
 [package]
-name = "raster-art-program-2"
+name = "amygui"
 version = "0.1.0"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 raylib = { version = "5.5.1", features = ["custom_frame_control", "nogif"] }
-amygui = { path = "amygui" }
+
+[build-dependencies]
+fs_extra = "1.2"
+cmake = "0.1.49"
+cc = "1.0"
+bindgen = "0.69.0"
