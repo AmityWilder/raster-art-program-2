@@ -1,20 +1,20 @@
 use raylib::prelude::*;
-use crate::{brush::Brush, draw_texture_custom, frame::Frame};
+use crate::{brush::Brush, frame::Frame};
 
-const FRAC_1_255: f32 = 1.0/255.0;
+const _FRAC_1_255: f32 = 1.0/255.0;
 
-const RGB_TO_OKLAB: [[f32; 3]; 3] = [
+const _RGB_TO_OKLAB: [[f32; 3]; 3] = [
     [0.4122214708, 0.5363325363, 0.0514459929],
     [0.2119034982, 0.6806995451, 0.1073969566],
     [0.0883024619, 0.2817188376, 0.6299787005],
 ];
 
-const fn rgb_to_oklab(r: f32, g: f32, b: f32) -> [f32; 3] {
+const fn _rgb_to_oklab(r: f32, g: f32, b: f32) -> [f32; 3] {
     let [
         [m11, m12, m13],
         [m21, m22, m23],
         [m31, m32, m33],
-    ] = RGB_TO_OKLAB;
+    ] = _RGB_TO_OKLAB;
     [
         m11*r + m12*g + m13*b,
         m21*r + m22*g + m23*b,
@@ -22,18 +22,18 @@ const fn rgb_to_oklab(r: f32, g: f32, b: f32) -> [f32; 3] {
     ]
 }
 
-const RGB_FROM_OKLAB: [[f32; 3]; 3] = [
+const _RGB_FROM_OKLAB: [[f32; 3]; 3] = [
     [ 4.07674,    -3.30771,   0.23097 ],
     [-1.26844,     2.60976,  -0.341319],
     [-0.00419609, -0.703419,  1.70761 ],
 ];
 
-const fn rgb_from_oklab(l: f32, a: f32, b: f32) -> [f32; 3] {
+const fn _rgb_from_oklab(l: f32, a: f32, b: f32) -> [f32; 3] {
     let [
         [m11, m12, m13],
         [m21, m22, m23],
         [m31, m32, m33],
-    ] = RGB_FROM_OKLAB;
+    ] = _RGB_FROM_OKLAB;
     [
         m11*l + m12*a + m13*b,
         m21*l + m22*a + m23*b,
@@ -44,8 +44,6 @@ const fn rgb_from_oklab(l: f32, a: f32, b: f32) -> [f32; 3] {
 fn gui_color_picker_custom<D: RaylibDraw>(d: &mut D, bounds: Rectangle, color_hsv: Vector3) -> Vector3 {
     use ffi::*;
     use raylib::prelude::{Color, Vector2, Vector3, Rectangle};
-
-    let root = Vector2::new(bounds.x, bounds.y);
 
     let mouse_pos;
     let is_mouse_down;
@@ -170,24 +168,7 @@ pub struct ColorEditor {
 }
 
 impl ColorEditor {
-    fn generate_tex<D: RaylibDraw>(d: &mut D, sat: f32) {
-        for hue in 0..360 {
-            for value in 0..255 {
-                let color = Color::color_from_hsv(hue as f32, sat, value as f32*FRAC_1_255);
-                d.draw_pixel(hue, 255 - value, color);
-            }
-        }
-    }
-
-    pub fn new(rl: &mut RaylibHandle, thread: &RaylibThread, brush: &Brush) -> Self {
-        let Vector3 { x: hue, y: sat, z: lum } = brush.color.color_to_hsv();
-
-        let mut hsv_tex = rl.load_render_texture(thread, 360, 255).unwrap();
-        {
-            let mut d = rl.begin_texture_mode(thread, &mut hsv_tex);
-            Self::generate_tex(&mut d, sat);
-        }
-
+    pub fn new(_rl: &mut RaylibHandle, _thread: &RaylibThread, brush: &Brush) -> Self {
         Self {
             color_hsv: brush.color.color_to_hsv(),
         }
@@ -203,37 +184,5 @@ impl ColorEditor {
             d.draw_rectangle(300, 5, 34, 34, Color::GRAY);
             d.draw_rectangle(301, 6, 32, 32, brush.color);
         }
-
-        // if rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) {
-        //     let mouse_pos = rl.get_mouse_position();
-        //     let Vector2 { mut x, mut y } = mouse_pos;
-        //     x = x.clamp(0.0, 360.0);
-        //     y = (1.0 - y*FRAC_1_255).clamp(0.0, 1.0);
-        //     if x != self.hue || y != self.lum {
-        //         self.is_color_dirty = true;
-        //         self.hue = x;
-        //         self.lum = y;
-        //     }
-        // }
-
-        // let scroll = rl.get_mouse_wheel_move();
-        // if scroll != 0.0 {
-        //     self.is_color_dirty = true;
-        //     self.sat = (self.sat + scroll*FRAC_1_255).clamp(0.0, 1.0);
-        //     {
-        //         let mut d = rl.begin_texture_mode(thread, &mut self.hsv_tex);
-        //         Self::generate_tex(&mut d, self.sat);
-        //     }
-        // }
-
-        // if self.is_color_dirty {
-        //     brush.color = Color::color_from_hsv(self.hue, self.sat, self.lum);
-
-        //     let mut d = frame.begin_drawing(rl, thread);
-        //     let rec = Rectangle { x: 0.0, y: 0.0, width: 360.0, height: 255.0 };
-        //     draw_texture_custom(&mut d, &self.hsv_tex, &rec, Color::WHITE);
-        //     let rec = Rectangle { x: 365.0, y: 20.0, width: 32.0, height: 32.0 };
-        //     d.draw_rectangle_rec(rec, brush.color);
-        // }
     }
 }
