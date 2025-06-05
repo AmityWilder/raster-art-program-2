@@ -90,8 +90,8 @@ impl ArtEditor {
         }
 
         let pen_pos = Vector2 {
-            x: (mouse_pos.x*zoom_inv - self.frac_pan.x).round(),
-            y: (mouse_pos.y*zoom_inv - self.frac_pan.y).round(),
+            x: (mouse_pos.x*zoom_inv - self.frac_pan.x).floor(),
+            y: (mouse_pos.y*zoom_inv - self.frac_pan.y).floor(),
         };
 
         if rl.is_key_pressed(KeyboardKey::KEY_G) {
