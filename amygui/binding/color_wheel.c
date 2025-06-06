@@ -112,22 +112,17 @@ Vector3 GuiColorPickerHSVWheel(Rectangle bounds, float triangleInnerSep, float p
 
     if (isMouseDown && isInTriangle)
     {
-        // clamp to triangle
         Vector2 mouseRel = Vector2Subtract(mousePos, blackPos);
 
         Vector2 colorVec = Vector2Normalize(Vector2Subtract(colorPos, blackPos));
-        float tColor = Vector2DotProduct(colorVec, mouseRel);
-
         Vector2 whiteVec = Vector2Normalize(Vector2Subtract(whitePos, blackPos));
+        float tColor = Vector2DotProduct(colorVec, mouseRel);
         float tWhite = Vector2DotProduct(whiteVec, mouseRel);
 
-        if ((tColor < 0) && (tWhite < 0))
-        {
-            val = 0;
-            sat = 0;
-        }
+        if ((tColor < 0) && (tWhite < 0)) val = sat = 0;
         else
         {
+            // clamped mouse position
             Vector2 cmousePos = mousePos;
 
             if (tColor >= 0)
@@ -145,7 +140,7 @@ Vector3 GuiColorPickerHSVWheel(Rectangle bounds, float triangleInnerSep, float p
             // linear intersection
             float u = Clamp(
                 -((blackPos.x - cmousePos.x)*(blackPos.y - whitePos.y) - (blackPos.y - cmousePos.y)*(blackPos.x - whitePos.x))/
-                ((blackPos.x - cmousePos.x)*(whitePos.y - colorPos.y) - (blackPos.y - cmousePos.y)*(whitePos.x - colorPos.x)),
+                 ((blackPos.x - cmousePos.x)*(whitePos.y - colorPos.y) - (blackPos.y - cmousePos.y)*(whitePos.x - colorPos.x)),
                 0.0f, 1.0f);
 
             Vector2 intersection = Vector2Lerp(whitePos, colorPos, u);

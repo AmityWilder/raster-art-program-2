@@ -59,7 +59,7 @@ impl ColorEditor {
             d.clear_background(Color::BLACK);
             let bounds = Rectangle::new(25.0, 25.0, 255.0, 255.0);
             // self.color_hsv = gui_color_picker_custom(&mut d, bounds, self.color_hsv);
-            self.color_hsv = d.gui_color_picker_hsv_wheel(bounds, 15.0, 3.0, 20.0, 150, self.color_hsv);
+            self.color_hsv = d.gui_color_picker_hsv_wheel(bounds, 15.0, 3.0, 20.0, 60, self.color_hsv);
             brush.color = Color::color_from_hsv(self.color_hsv.x, self.color_hsv.y, self.color_hsv.z);
             d.draw_rectangle(300, 5, 34, 34, Color::GRAY);
             d.draw_rectangle(301, 6, 32, 32, brush.color);
