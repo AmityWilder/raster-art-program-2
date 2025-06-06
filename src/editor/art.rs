@@ -14,8 +14,8 @@ enum Tool {
 pub struct ArtEditor {
     canvas: RenderTexture2D,
     is_canvas_dirty: bool,
-    zoom_pow: f32,
-    frac_pan: Vector2,
+    zoom_pow: i32,
+    pan: Vector2,
     tool: Tool,
 }
 
@@ -24,8 +24,8 @@ impl ArtEditor {
         Self {
             canvas,
             is_canvas_dirty: true,
-            zoom_pow: 0.0,
-            frac_pan: Vector2::zero(),
+            zoom_pow: 0,
+            pan: Vector2::zero(),
             tool: Tool::Pen {
                 pen_pos_prev: None,
             },
@@ -48,18 +48,20 @@ impl ArtEditor {
             if scroll != 0.0 {
                 if rl.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) || rl.is_key_down(KeyboardKey::KEY_RIGHT_CONTROL) {
                     // zoom
-                    self.zoom_pow = (self.zoom_pow + scroll).clamp(-4.0, 4.0);
+                    let zoom_pow_old = self.zoom_pow;
+                    self.zoom_pow = (self.zoom_pow + scroll.round() as i32).clamp(-4, 4);
+                    self.pan = self.pan + mouse_pos*(2.0f32.powi(-self.zoom_pow) - 2.0f32.powi(-zoom_pow_old));
                     self.is_canvas_dirty = true;
                 } else if rl.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) || rl.is_key_down(KeyboardKey::KEY_RIGHT_SHIFT) {
                     // horizontal pan
-                    self.frac_pan.x += scroll * 20.0;
+                    self.pan.x += scroll * 20.0;
                     self.is_canvas_dirty = true;
                 } else if rl.is_key_down(KeyboardKey::KEY_LEFT_ALT) || rl.is_key_down(KeyboardKey::KEY_RIGHT_ALT) {
                     // pen size
                     new_brush_radius = (new_brush_radius + scroll * 0.5).max(0.5);
                 } else {
                     // vertical pan
-                    self.frac_pan.y += scroll * 20.0;
+                    self.pan.y += scroll * 20.0;
                     self.is_canvas_dirty = true;
                 }
             }
@@ -78,20 +80,20 @@ impl ArtEditor {
             }
         }
 
-        let zoom = 2.0f32.powi(self.zoom_pow as i32);
+        let zoom = 2.0f32.powi(self.zoom_pow);
         let zoom_inv = zoom.recip();
 
         if rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_MIDDLE) {
             let movement = rl.get_mouse_delta();
             if movement.length_sqr() > 0.0 {
-                self.frac_pan = self.frac_pan + movement * zoom_inv;
+                self.pan = self.pan + movement * zoom_inv;
                 self.is_canvas_dirty = true;
             }
         }
 
         let pen_pos = Vector2 {
-            x: (mouse_pos.x*zoom_inv - self.frac_pan.x).floor(),
-            y: (mouse_pos.y*zoom_inv - self.frac_pan.y).floor(),
+            x: (mouse_pos.x*zoom_inv - self.pan.x).floor(),
+            y: (mouse_pos.y*zoom_inv - self.pan.y).floor(),
         };
 
         if rl.is_key_pressed(KeyboardKey::KEY_G) {
@@ -147,8 +149,8 @@ impl ArtEditor {
         // Render
         if self.is_canvas_dirty {
             let pan = Vector2 {
-                x: self.frac_pan.x.round(),
-                y: self.frac_pan.y.round(),
+                x: self.pan.x.round(),
+                y: self.pan.y.round(),
             };
 
             let canvas_rec = Rectangle {
