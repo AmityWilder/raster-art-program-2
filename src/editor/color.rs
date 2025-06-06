@@ -42,128 +42,6 @@ const fn _rgb_from_oklab(l: f32, a: f32, b: f32) -> [f32; 3] {
     ]
 }
 
-fn gui_color_picker_custom<D: RaylibDraw>(d: &mut D, bounds: Rectangle, color_hsv: Vector3) -> Vector3 {
-    use ffi::*;
-    use raylib::prelude::{Color, Vector2, Vector3, Rectangle};
-
-    let mouse_pos;
-    let is_mouse_down;
-    unsafe {
-        mouse_pos = Vector2::from(GetMousePosition());
-        is_mouse_down = IsMouseButtonDown(MouseButton::MOUSE_BUTTON_LEFT as i32);
-    }
-
-    let thick = 20.0;
-    let half_width = 0.5*bounds.width;
-    let half_height = 0.5*bounds.height;
-    let center = Vector2::new(bounds.x + half_width, bounds.y + half_height);
-    let outer_radius = half_width.min(half_height);
-    let inner_radius = outer_radius - thick;
-    let triangle_radius = inner_radius - 5.0;
-
-    let is_in_hue_wheel = (mouse_pos - center).length_sqr() >= inner_radius*inner_radius;
-
-    let hue = if is_mouse_down && is_in_hue_wheel {
-        center.angle_to(mouse_pos).to_degrees()
-    } else {
-        color_hsv.x
-    };
-
-    let color_pos = center + Vector2::new( hue         .to_radians().cos()*triangle_radius,  hue         .to_radians().sin()*triangle_radius);
-    let white_pos = center + Vector2::new((hue + 120.0).to_radians().cos()*triangle_radius, (hue + 120.0).to_radians().sin()*triangle_radius);
-    let black_pos = center + Vector2::new((hue + 240.0).to_radians().cos()*triangle_radius, (hue + 240.0).to_radians().sin()*triangle_radius);
-
-    let (val, sat) = (|s: Vector2, p0: Vector2, p1: Vector2, p2: Vector2| {
-        if is_mouse_down && !is_in_hue_wheel {
-            let u = (
-                ((p0.x - s.x)*(p0.y - p1.y) - (p0.y - s.y)*(p0.x - p1.x))/
-                ((p0.x - s.x)*(p1.y - p2.y) - (p0.y - s.y)*(p1.x - p2.x))
-            ).clamp(-1.0, 0.0);
-            let p = p1 - (p2 - p1)*u;
-            let a = (s.distance_to(p0)/p .distance_to(p0)).clamp(0.0, 1.0);
-            let b = (p.distance_to(p1)/p2.distance_to(p1)).clamp(0.0, 1.0);
-            return (a, b);
-        }
-        (color_hsv.z, color_hsv.y)
-    })(mouse_pos, black_pos, white_pos, color_pos);
-
-    let color_max = Color::color_from_hsv(hue, 1.0, 1.0);
-
-    // hue line
-
-    let hue_v = Vector2::new(hue.to_radians().cos(), hue.to_radians().sin());
-    d.draw_line_ex(center + hue_v*(inner_radius - 4.0), center + hue_v*(outer_radius + 4.0), 4.0, Color::SLATEBLUE);
-
-    unsafe {
-        // circle
-
-        let tex_shapes = GetShapesTexture();
-        rlSetTexture(tex_shapes.id);
-        let shape_rect = GetShapesTextureRectangle();
-        rlBegin(RL_QUADS as i32);
-        let mut color_a = Color::new(255, 0, 0, 255);
-        let mut outer_a = Vector2::new(outer_radius + center.x, center.y);
-        let mut inner_a = Vector2::new(inner_radius + center.x, center.y);
-        for t in (1..=360u16).map(f32::from) {
-            let color_b = Color::color_from_hsv(t, 1.0, 1.0);
-            let (sin, cos) = t.to_radians().sin_cos();
-            let outer_b = Vector2::new(cos*outer_radius + center.x, sin*outer_radius + center.y);
-            let inner_b = Vector2::new(cos*inner_radius + center.x, sin*inner_radius + center.y);
-
-            rlColor4ub(color_a.r, color_a.g, color_a.b, 255);
-            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, (shape_rect.y + shape_rect.height)/tex_shapes.height as f32);
-            rlVertex2f(outer_a.x, outer_a.y);
-
-            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
-            rlVertex2f(inner_a.x, inner_a.y);
-
-            rlColor4ub(color_b.r, color_b.g, color_b.b, 255);
-            rlTexCoord2f((shape_rect.x + shape_rect.width)/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
-            rlVertex2f(inner_b.x, inner_b.y);
-
-            rlTexCoord2f((shape_rect.x + shape_rect.width)/tex_shapes.width as f32, (shape_rect.y + shape_rect.height)/tex_shapes.height as f32);
-            rlVertex2f(outer_b.x, outer_b.y);
-
-            color_a = color_b;
-            outer_a = outer_b;
-            inner_a = inner_b;
-        }
-        rlEnd();
-        rlSetTexture(0);
-
-        // triangle
-
-        let tex_shapes = GetShapesTexture();
-        rlSetTexture(tex_shapes.id);
-        let shape_rect = GetShapesTextureRectangle();
-        rlBegin(RL_TRIANGLES as i32);
-            rlColor4ub(color_max.r, color_max.g, color_max.b, 255);
-            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, (shape_rect.y + shape_rect.height)/tex_shapes.height as f32);
-            rlVertex2f(color_pos.x, color_pos.y);
-
-            rlColor4ub(0, 0, 0, 255);
-            rlTexCoord2f((shape_rect.x + shape_rect.width)/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
-            rlVertex2f(black_pos.x, black_pos.y);
-
-            rlColor4ub(255, 255, 255, 255);
-            rlTexCoord2f(shape_rect.x/tex_shapes.width as f32, shape_rect.y/tex_shapes.height as f32);
-            rlVertex2f(white_pos.x, white_pos.y);
-        rlEnd();
-        rlSetTexture(0);
-    }
-
-    // sample
-    (|p0: Vector2, p1: Vector2, p2: Vector2, a: f32, b: f32| {
-        let sample_radius = 3.0;
-        let p = p1 + (p2 - p1)*b;
-        let s = p0 + (p - p0)*a;
-        d.draw_rectangle_rec(Rectangle::new(s.x - sample_radius - 1.0, s.y - sample_radius - 1.0, (sample_radius + 1.0)*2.0, (sample_radius + 1.0)*2.0), Color::SLATEBLUE);
-        d.draw_rectangle_rec(Rectangle::new(s.x - sample_radius, s.y - sample_radius, sample_radius*2.0, sample_radius*2.0), Color::color_from_hsv(hue, sat, val));
-    })(black_pos, white_pos, color_pos, val, sat);
-
-    Vector3::new(hue, sat, val)
-}
-
 pub struct ColorEditor {
     color_hsv: Vector3,
 }
@@ -181,7 +59,7 @@ impl ColorEditor {
             d.clear_background(Color::BLACK);
             let bounds = Rectangle::new(25.0, 25.0, 255.0, 255.0);
             // self.color_hsv = gui_color_picker_custom(&mut d, bounds, self.color_hsv);
-            self.color_hsv = d.gui_color_picker_hsv_wheel(bounds, self.color_hsv);
+            self.color_hsv = d.gui_color_picker_hsv_wheel(bounds, 15.0, 3.0, 20.0, 150, self.color_hsv);
             brush.color = Color::color_from_hsv(self.color_hsv.x, self.color_hsv.y, self.color_hsv.z);
             d.draw_rectangle(300, 5, 34, 34, Color::GRAY);
             d.draw_rectangle(301, 6, 32, 32, brush.color);
