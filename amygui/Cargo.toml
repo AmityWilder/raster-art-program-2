@@ -8,7 +8,4 @@ build = "build.rs"
 raylib = { version = "5.5.1", features = ["custom_frame_control", "nogif"] }
 
 [build-dependencies]
-fs_extra = "1.2"
-cmake = "0.1.49"
 cc = "1.0"
-bindgen = "0.69.0"
