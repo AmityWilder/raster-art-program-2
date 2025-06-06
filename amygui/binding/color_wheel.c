@@ -76,7 +76,18 @@ static Vector3 ConvertHSVtoRGB(Vector3 hsv)
 }
 
 // Draw HSV color picker wheel, returns updated color in HSV
-Vector3 GuiColorPickerHSVWheel(Rectangle bounds, float triangleInnerSep, float previewRadius, float wheelThick, int wheelSegments, Vector3 hsv)
+// NOTES:
+// - triangle radius is circumscribed
+// - Color data should be passed normalized
+Vector3 GuiColorPickerHSVWheel(
+    Vector2 center,
+    float previewRadius,
+    float triangleRadius,
+    float wheelInnerRadius,
+    float wheelOuterRadius,
+    int wheelSegments,
+    Vector3 hsv
+)
 {
     const Color selectingColor = BLUE;
     const Color idleColor = GRAY;
@@ -84,16 +95,9 @@ Vector3 GuiColorPickerHSVWheel(Rectangle bounds, float triangleInnerSep, float p
     Vector2 mousePos = GetMousePosition();
     bool isMouseDown = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 
-    float halfWidth = bounds.width/2;
-    float halfHeight = bounds.height/2;
-    Vector2 center = { bounds.x + halfWidth, bounds.y + halfHeight };
-    float outerRadius = (halfWidth < halfHeight)? halfWidth : halfHeight;
-    float innerRadius = outerRadius - wheelThick;
-    float triangleRadius = innerRadius - triangleInnerSep;
-
-    bool isInPicker = CheckCollisionPointRec(mousePos, bounds);
-    bool isInHueWheel = isInPicker && (Vector2DistanceSqr(mousePos, center) >= innerRadius*innerRadius);
-    bool isInTriangle = isInPicker && !isInHueWheel;
+    bool isInPicker = CheckCollisionPointCircle(mousePos, center, wheelOuterRadius);
+    bool isInTriangle = isInPicker && CheckCollisionPointCircle(mousePos, center, wheelInnerRadius);
+    bool isInHueWheel = isInPicker && CheckCollisionPointCircle(mousePos, center, wheelOuterRadius) && !CheckCollisionPointCircle(mousePos, center, wheelInnerRadius);
 
     float hue = hsv.x;
     float sat = hsv.y;
@@ -156,58 +160,61 @@ Vector3 GuiColorPickerHSVWheel(Rectangle bounds, float triangleInnerSep, float p
     hsv.y = sat;
     hsv.z = val;
 
-    // hue line
-
-    float hueLineThick = 4.0f;
-    Vector2 start = {
-        center.x + cosf(DEG2RAD*hue)*(innerRadius - hueLineThick),
-        center.y + sinf(DEG2RAD*hue)*(innerRadius - hueLineThick),
-    };
-    Vector2 end = {
-        center.x + cosf(DEG2RAD*hue)*(outerRadius + hueLineThick),
-        center.y + sinf(DEG2RAD*hue)*(outerRadius + hueLineThick),
-    };
-    DrawLineEx(start, end, 4.0f, (isMouseDown && isInHueWheel)? selectingColor : idleColor);
-
     Texture2D texShapes = GetShapesTexture();
     Rectangle shapeRect = GetShapesTextureRectangle();
 
-    // circle
+    if (wheelSegments > 0)
+    {
+        // hue line
 
-    rlSetTexture(texShapes.id);
-    rlBegin(RL_QUADS);
-        Vector3 colorA = { 1.0f, 0.0f, 0.0f };
-        Vector2 outerA = { outerRadius + center.x, center.y };
-        Vector2 innerA = { innerRadius + center.x, center.y };
-        float stepSize = 360.0f/wheelSegments;
+        float hueLineThick = 4.0f;
+        Vector2 start = {
+            center.x + cosf(DEG2RAD*hue)*(wheelInnerRadius - hueLineThick),
+            center.y + sinf(DEG2RAD*hue)*(wheelInnerRadius - hueLineThick),
+        };
+        Vector2 end = {
+            center.x + cosf(DEG2RAD*hue)*(wheelOuterRadius + hueLineThick),
+            center.y + sinf(DEG2RAD*hue)*(wheelOuterRadius + hueLineThick),
+        };
+        DrawLineEx(start, end, 4.0f, (isMouseDown && isInHueWheel)? selectingColor : idleColor);
 
-        for (int i = 1; i <= wheelSegments; i++)
-        {
-            float wheelHue = i*stepSize;
-            Vector3 colorB = ConvertHSVtoRGB(CLITERAL(Vector3) { wheelHue, 1.0f, 1.0f });
-            Vector2 outerB = { cosf(DEG2RAD*wheelHue)*outerRadius + center.x, sinf(DEG2RAD*wheelHue)*outerRadius + center.y };
-            Vector2 innerB = { cosf(DEG2RAD*wheelHue)*innerRadius + center.x, sinf(DEG2RAD*wheelHue)*innerRadius + center.y };
+        // hue wheel
 
-            rlColor3f(colorA.x, colorA.y, colorA.z);
-            rlTexCoord2f(shapeRect.x/texShapes.width, (shapeRect.y + shapeRect.height)/texShapes.height);
-            rlVertex2f(outerA.x, outerA.y);
+        rlSetTexture(texShapes.id);
+        rlBegin(RL_QUADS);
+            Vector3 colorA = { 1.0f, 0.0f, 0.0f };
+            Vector2 outerA = { wheelOuterRadius + center.x, center.y };
+            Vector2 innerA = { wheelInnerRadius + center.x, center.y };
+            float stepSize = 360.0f/wheelSegments;
 
-            rlTexCoord2f(shapeRect.x/texShapes.width, shapeRect.y/texShapes.height);
-            rlVertex2f(innerA.x, innerA.y);
+            for (int i = 1; i <= wheelSegments; i++)
+            {
+                float wheelHue = i*stepSize;
+                Vector3 colorB = ConvertHSVtoRGB(CLITERAL(Vector3) { wheelHue, 1.0f, 1.0f });
+                Vector2 outerB = { cosf(DEG2RAD*wheelHue)*wheelOuterRadius + center.x, sinf(DEG2RAD*wheelHue)*wheelOuterRadius + center.y };
+                Vector2 innerB = { cosf(DEG2RAD*wheelHue)*wheelInnerRadius + center.x, sinf(DEG2RAD*wheelHue)*wheelInnerRadius + center.y };
 
-            rlColor3f(colorB.x, colorB.y, colorB.z);
-            rlTexCoord2f((shapeRect.x + shapeRect.width)/texShapes.width, shapeRect.y/texShapes.height);
-            rlVertex2f(innerB.x, innerB.y);
+                rlColor3f(colorA.x, colorA.y, colorA.z);
+                rlTexCoord2f(shapeRect.x/texShapes.width, (shapeRect.y + shapeRect.height)/texShapes.height);
+                rlVertex2f(outerA.x, outerA.y);
 
-            rlTexCoord2f((shapeRect.x + shapeRect.width)/texShapes.width, (shapeRect.y + shapeRect.height)/texShapes.height);
-            rlVertex2f(outerB.x, outerB.y);
+                rlTexCoord2f(shapeRect.x/texShapes.width, shapeRect.y/texShapes.height);
+                rlVertex2f(innerA.x, innerA.y);
 
-            colorA = colorB;
-            outerA = outerB;
-            innerA = innerB;
-        }
+                rlColor3f(colorB.x, colorB.y, colorB.z);
+                rlTexCoord2f((shapeRect.x + shapeRect.width)/texShapes.width, shapeRect.y/texShapes.height);
+                rlVertex2f(innerB.x, innerB.y);
 
-    rlEnd();
+                rlTexCoord2f((shapeRect.x + shapeRect.width)/texShapes.width, (shapeRect.y + shapeRect.height)/texShapes.height);
+                rlVertex2f(outerB.x, outerB.y);
+
+                colorA = colorB;
+                outerA = outerB;
+                innerA = innerB;
+            }
+
+        rlEnd();
+    }
 
     // triangle
 
