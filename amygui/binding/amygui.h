@@ -10,3 +10,6 @@ Vector3 GuiColorPickerHSVWheel(
     int wheelSegments,
     Vector3 hsv
 );
+
+// Draw texture 1:1 within rec
+void DrawTextureDirect(Texture texture, Rectangle rec);

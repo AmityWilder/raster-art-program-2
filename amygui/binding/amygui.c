@@ -282,3 +282,36 @@ Vector3 GuiColorPickerHSVWheel(
 
     return hsv;
 }
+
+// Draw texture 1:1 within rec
+void DrawTextureDirect(Texture texture, Rectangle rec) {
+    float left = rec.x;
+    float right = left + rec.width;
+    float top = rec.y;
+    float bottom = top + rec.height;
+
+    rlSetTexture(texture.id);
+    rlBegin(RL_QUADS);
+
+        rlColor4ub(255, 255, 255, 255);
+        rlNormal3f(0.0, 0.0, 1.0);
+
+        // Top left
+        rlTexCoord2f(0.0, 1.0);
+        rlVertex2f(left, top);
+
+        // Bottom left
+        rlTexCoord2f(0.0, 0.0);
+        rlVertex2f(left, bottom);
+
+        // Bottom right
+        rlTexCoord2f(1.0, 0.0);
+        rlVertex2f(right, bottom);
+
+        // Top right
+        rlTexCoord2f(1.0, 1.0);
+        rlVertex2f(right, top);
+
+    rlEnd();
+    rlSetTexture(0);
+}

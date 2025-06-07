@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
-
 use raylib::prelude::*;
-use crate::draw_texture_custom;
+use amygui::prelude::*;
 
 pub struct Frame {
     buffer: RenderTexture2D,
@@ -76,7 +75,7 @@ impl Frame {
             width: self.buffer.texture.width as f32,
             height: self.buffer.texture.height as f32,
         };
-        draw_texture_custom(d, &self.buffer, &rec, Color::WHITE);
+        d.draw_texture_direct(&self.buffer, rec);
         self.is_dirty = false;
     }
 }

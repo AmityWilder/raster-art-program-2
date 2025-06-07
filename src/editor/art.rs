@@ -1,5 +1,6 @@
+use crate::{brush::Brush, editor::Editor, frame::Frame};
 use raylib::prelude::*;
-use crate::{brush::Brush, draw_texture_custom, frame::Frame};
+use amygui::prelude::*;
 
 mod flood_fill;
 use flood_fill::flood_fill;
@@ -17,10 +18,12 @@ pub struct ArtEditor {
     zoom_pow: i32,
     pan: Vector2,
     tool: Tool,
+    is_erasing: bool,
+    is_drag_panning: bool,
 }
 
 impl ArtEditor {
-    pub fn new(canvas: RenderTexture2D) -> Self {
+    pub const fn new(canvas: RenderTexture2D) -> Self {
         Self {
             canvas,
             is_canvas_dirty: true,
@@ -29,21 +32,40 @@ impl ArtEditor {
             tool: Tool::Pen {
                 pen_pos_prev: None,
             },
+            is_erasing: false,
+            is_drag_panning: false,
         }
     }
 
-    pub fn mark_dirty(&mut self) {
+    pub const fn set_pan(&mut self, pan: Vector2) {
+        self.pan = pan;
+    }
+}
+
+impl Editor for ArtEditor {
+    #[inline]
+    fn mark_dirty(&mut self) {
         self.is_canvas_dirty = true;
     }
 
-    pub fn update(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread, brush: &mut Brush, frame: &mut Frame) {
+    #[inline]
+    fn is_dirty(&self) -> bool {
+        self.is_canvas_dirty
+    }
+
+    #[inline]
+    fn is_focused(&self) -> bool {
+        self.is_drag_panning || matches!(self.tool, Tool::Pen { pen_pos_prev: Some(_) })
+    }
+
+    fn update(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread, brush: &mut Brush, viewport: Rectangle, frame: &mut Frame, is_awake: bool) {
         let mouse_pos = rl.get_mouse_position();
 
         // Zoom + pan
-        {
+        if is_awake {
             let scroll = rl.get_mouse_wheel_move();
 
-            let mut new_brush_radius = brush.radius();
+            let mut new_brush_radius = brush.radius;
 
             if scroll != 0.0 {
                 if rl.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) || rl.is_key_down(KeyboardKey::KEY_RIGHT_CONTROL) {
@@ -67,15 +89,20 @@ impl ArtEditor {
             }
 
             // pen size
-            const KEY_ZERO_U32: u32 = KeyboardKey::KEY_ZERO as u32;
-            const KEY_ONE_U32: u32 = KeyboardKey::KEY_ONE as u32;
-            const KEY_NINE_U32: u32 = KeyboardKey::KEY_NINE as u32;
-            if let Some(key @ KEY_ONE_U32..=KEY_NINE_U32) = rl.get_key_pressed_number() {
-                new_brush_radius = (key - KEY_ZERO_U32) as f32 * 0.5;
+            if rl.is_key_pressed(KeyboardKey::KEY_ONE) {
+                new_brush_radius = 0.5;
+            } else if rl.is_key_pressed(KeyboardKey::KEY_TWO) {
+                new_brush_radius = 1.0;
+            } else if rl.is_key_pressed(KeyboardKey::KEY_THREE) {
+                new_brush_radius = 2.0;
+            } else if rl.is_key_pressed(KeyboardKey::KEY_FOUR) {
+                new_brush_radius = 3.0;
+            } else if rl.is_key_pressed(KeyboardKey::KEY_FIVE) {
+                new_brush_radius = 4.0;
             }
 
-            if brush.radius() != new_brush_radius {
-                brush.set_radius(rl, thread, new_brush_radius);
+            if brush.radius != new_brush_radius {
+                brush.radius = new_brush_radius;
                 self.is_canvas_dirty = true;
             }
         }
@@ -83,11 +110,20 @@ impl ArtEditor {
         let zoom = 2.0f32.powi(self.zoom_pow);
         let zoom_inv = zoom.recip();
 
-        if rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_MIDDLE) {
-            let movement = rl.get_mouse_delta();
-            if movement.length_sqr() > 0.0 {
-                self.pan = self.pan + movement * zoom_inv;
-                self.is_canvas_dirty = true;
+        if is_awake {
+            {
+                let is_pressed = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_MIDDLE);
+                if is_pressed || rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_MIDDLE) {
+                    self.is_drag_panning = is_pressed;
+                }
+            }
+
+            if self.is_drag_panning {
+                let movement = rl.get_mouse_delta();
+                if movement.length_sqr() > 0.0 {
+                    self.pan = self.pan + movement * zoom_inv;
+                    self.is_canvas_dirty = true;
+                }
             }
         }
 
@@ -96,52 +132,55 @@ impl ArtEditor {
             y: (mouse_pos.y*zoom_inv - self.pan.y).floor(),
         };
 
-        if rl.is_key_pressed(KeyboardKey::KEY_G) {
-            self.tool = Tool::Fill;
-        } else if rl.is_key_pressed(KeyboardKey::KEY_B) {
-            if !matches!(self.tool, Tool::Pen { .. }) {
-                self.tool = Tool::Pen { pen_pos_prev: None };
+        if is_awake {
+            if rl.is_key_pressed(KeyboardKey::KEY_G) {
+                self.tool = Tool::Fill;
+            } else if rl.is_key_pressed(KeyboardKey::KEY_B) {
+                if !matches!(self.tool, Tool::Pen { .. }) {
+                    self.tool = Tool::Pen { pen_pos_prev: None };
+                }
             }
-        }
 
-        // Paint
-        match &mut self.tool {
-            Tool::Pen { pen_pos_prev } => {
-                if  rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) ||
-                    rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_RIGHT)
-                {
-                    *pen_pos_prev = None;
-                }
-
-                if let Some((pos_prev, pos_pprev)) = &mut *pen_pos_prev && pos_prev != &pen_pos {
-                    let mut d = rl.begin_texture_mode(&thread, &mut self.canvas);
-                    let pos_pprev = std::mem::replace(pos_pprev, Some(*pos_prev));
-                    let pos_prev = std::mem::replace(pos_prev, pen_pos);
-                    brush.paint(&mut d, Some((pos_prev, pos_pprev)), pen_pos);
-                    self.is_canvas_dirty = true;
-                }
-
-                if pen_pos_prev.is_none() {
-                    let is_right_pressed = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_RIGHT);
-                    if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) || is_right_pressed {
-                        *pen_pos_prev = Some((pen_pos, None));
-                        brush.is_erasing = is_right_pressed;
+            // Paint
+            match &mut self.tool {
+                Tool::Pen { pen_pos_prev } => {
+                    if let Some((pos_prev, pos_pprev)) = &mut *pen_pos_prev && pos_prev != &pen_pos {
                         let mut d = rl.begin_texture_mode(&thread, &mut self.canvas);
-                        brush.paint(&mut d, None, pen_pos);
+                        let pos_pprev = std::mem::replace(pos_pprev, Some(*pos_prev));
+                        let pos_prev = std::mem::replace(pos_prev, pen_pos);
+                        brush.paint(&mut d, pos_pprev.into_iter().chain([pos_prev, pen_pos].into_iter()), self.is_erasing);
                         self.is_canvas_dirty = true;
                     }
-                }
-            }
 
-            Tool::Fill => {
-                if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
-                    let mut img = self.canvas.load_image().unwrap();
-                    let (x, y) = (pen_pos.x as i32, img.height - pen_pos.y as i32);
-                    flood_fill(&mut img, x, y, brush.color);
-                    let len = get_pixel_data_size(img.width, img.height, img.format()).try_into().unwrap();
-                    let pixels = unsafe { std::slice::from_raw_parts(img.data.cast(), len) };
-                    self.canvas.update_texture(pixels).unwrap();
-                    self.is_canvas_dirty = true;
+                    if  rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_LEFT) ||
+                        rl.is_mouse_button_released(MouseButton::MOUSE_BUTTON_RIGHT)
+                    {
+                        *pen_pos_prev = None;
+                    }
+
+                    if pen_pos_prev.is_none() {
+                        let is_right_pressed = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_RIGHT);
+                        if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) || is_right_pressed {
+                            *pen_pos_prev = Some((pen_pos, None));
+                            self.is_erasing = is_right_pressed;
+                            let mut d = rl.begin_texture_mode(&thread, &mut self.canvas);
+                            brush.paint(&mut d, [pen_pos], self.is_erasing);
+                            self.is_canvas_dirty = true;
+                        }
+                    }
+                }
+
+                Tool::Fill => {
+                    let is_erasing = rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_RIGHT);
+                    if is_erasing || rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {
+                        let mut img = self.canvas.load_image().unwrap();
+                        let (x, y) = (pen_pos.x as i32, img.height - pen_pos.y as i32);
+                        flood_fill(&mut img, x, y, if is_erasing { Color::BLANK } else { brush.color });
+                        let len = get_pixel_data_size(img.width, img.height, img.format()).try_into().unwrap();
+                        let pixels = unsafe { std::slice::from_raw_parts(img.data.cast(), len) };
+                        self.canvas.update_texture(pixels).unwrap();
+                        self.is_canvas_dirty = true;
+                    }
                 }
             }
         }
@@ -162,10 +201,11 @@ impl ArtEditor {
 
             {
                 let mut d = frame.begin_drawing(rl, thread);
+                let mut d = d.begin_scissor_mode(viewport.x as i32, viewport.y as i32, viewport.width as i32, viewport.height as i32);
                 d.clear_background(Color::BLACK);
                 d.draw_rectangle_rec(canvas_rec, Color::new(42, 42, 42, 255));
 
-                draw_texture_custom(&mut d, &self.canvas, &canvas_rec, Color::WHITE);
+                d.draw_texture_direct(&self.canvas, canvas_rec);
             }
             self.is_canvas_dirty = false;
         }
