@@ -127,6 +127,7 @@ impl Editor for ColorEditor {
                         InterpStyle::Line  => InterpStyle::Space,
                         InterpStyle::Space => InterpStyle::Curve,
                     };
+                    self.is_colorwheel_dirty = true;
                 }
             }
 
@@ -135,6 +136,7 @@ impl Editor for ColorEditor {
                     self.palette.pop_front();
                 }
                 self.palette.push_back(self.color_hsv);
+                self.is_colorwheel_dirty = true;
             }
         }
 
