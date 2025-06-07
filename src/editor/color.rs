@@ -48,6 +48,7 @@ pub struct ColorEditor {
     color_hsv: Vector3,
     is_colorwheel_dirty: bool,
     palette: VecDeque<Vector3>,
+    cached_brush_radius: f32,
 }
 
 impl ColorEditor {
@@ -82,6 +83,7 @@ impl ColorEditor {
             color_hsv: brush.color.color_to_hsv(),
             is_colorwheel_dirty: true,
             palette: VecDeque::with_capacity(Self::PALETTE_CAP),
+            cached_brush_radius: -1.0,
         }
     }
 }
@@ -103,6 +105,11 @@ impl Editor for ColorEditor {
     }
 
     fn update(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread, brush: &mut Brush, viewport: Rectangle, frame: &mut Frame, is_awake: bool) {
+        if brush.radius != self.cached_brush_radius {
+            self.cached_brush_radius = brush.radius;
+            self.is_colorwheel_dirty = true;
+        }
+
         if is_awake {
             let mouse_pos = rl.get_mouse_position();
 
