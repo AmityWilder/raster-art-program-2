@@ -51,7 +51,7 @@ pub struct ColorEditor {
 }
 
 impl ColorEditor {
-    const PADDING: f32 = 25.0;
+    const PADDING: f32 = 5.0;
     const PALETTE_GAP: f32 = 8.0;
     const OUTER_RADIUS: f32 = 100.0;
     const THICK: f32 = 20.0;
@@ -61,7 +61,7 @@ impl ColorEditor {
     const BRUSH_SLOT_WIDTH: f32 = 40.0;
     const BRUSH_SLOT_X: f32 = Self::CENTER.x + Self::OUTER_RADIUS + Self::PADDING;
     const COLOR_SLOT_WIDTH: f32 = 20.0;
-    const PALETTE_X: f32 = Self::BRUSH_SLOT_X + Self::BRUSH_SLOT_WIDTH + 3.0 * Self::PALETTE_GAP;
+    const PALETTE_X: f32 = Self::BRUSH_SLOT_X + Self::BRUSH_SLOT_WIDTH + Self::PALETTE_GAP;
     const SEGMENT_WIDTH: f32 = Self::COLOR_SLOT_WIDTH + Self::PALETTE_GAP;
     const PALETTE_CAP: usize = 16;
     const PALETTE_REC: Rectangle = Rectangle::new(
@@ -139,6 +139,8 @@ impl Editor for ColorEditor {
         }
 
         if self.is_colorwheel_dirty {
+            self.is_colorwheel_dirty = false;
+
             let mut d = frame.begin_drawing(rl, thread);
             let mut d = d.begin_scissor_mode(viewport.x as i32, viewport.y as i32, viewport.width as i32, viewport.height as i32);
             {

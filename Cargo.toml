@@ -9,3 +9,4 @@ edition = "2024"
 [dependencies]
 raylib = { version = "5.5.1", features = ["custom_frame_control", "nogif"] }
 amygui = { path = "amygui" }
+rfd = "0.15.3"

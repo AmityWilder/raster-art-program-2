@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{brush::Brush, editor::Editor, frame::Frame};
 use raylib::prelude::*;
 use amygui::prelude::*;
@@ -39,6 +41,40 @@ impl ArtEditor {
 
     pub const fn set_pan(&mut self, pan: Vector2) {
         self.pan = pan;
+    }
+
+    pub fn resize(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread, new_width: u32, new_height: u32) {
+        if new_width == self.canvas.width() as u32 && new_height == self.canvas.height() as u32 { return; }
+        let old_canvas = std::mem::replace(&mut self.canvas, rl.load_render_texture(&thread, new_width, new_height).unwrap());
+        {
+            let mut d = rl.begin_texture_mode(thread, &mut self.canvas);
+            d.clear_background(Color::BLANK);
+            d.draw_texture_direct(&old_canvas, rrect(0, 0, old_canvas.width(), old_canvas.height()));
+            self.is_canvas_dirty = true;
+        }
+    }
+
+    pub fn save(&self, _rl: &mut RaylibHandle, _thread: &RaylibThread, path: &Path) -> Option<()> {
+        let mut image = self.canvas.load_image().unwrap();
+        image.flip_vertical();
+        image.export_image(path.to_str()?);
+        Some(())
+    }
+
+    pub fn import(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread, path: &Path) -> Option<()> {
+        let imported = rl.load_texture(thread, path.to_str()?).ok()?;
+        if imported.width > self.canvas.width() || imported.height > self.canvas.height() {
+            let new_width  = imported.width .max(self.canvas.width ()).try_into().unwrap();
+            let new_height = imported.height.max(self.canvas.height()).try_into().unwrap();
+            self.resize(rl, thread, new_width, new_height);
+        }
+        {
+            let mut d = rl.begin_texture_mode(thread, &mut self.canvas);
+            let rec = rrect(0, 0, imported.width, imported.height);
+            d.draw_texture_direct(imported, rec);
+            self.is_canvas_dirty = true;
+        }
+        Some(())
     }
 }
 
@@ -187,6 +223,8 @@ impl Editor for ArtEditor {
 
         // Render
         if self.is_canvas_dirty {
+            self.is_canvas_dirty = false;
+
             let pan = Vector2 {
                 x: self.pan.x.round(),
                 y: self.pan.y.round(),
@@ -207,7 +245,6 @@ impl Editor for ArtEditor {
 
                 d.draw_texture_direct(&self.canvas, canvas_rec);
             }
-            self.is_canvas_dirty = false;
         }
     }
 }

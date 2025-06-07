@@ -1,6 +1,5 @@
 #![windows_subsystem = "windows"]
 
-use std::time::{Duration, Instant};
 use raylib::prelude::*;
 
 mod brush;
@@ -10,6 +9,7 @@ mod editor;
 use brush::Brush;
 use frame::Frame;
 use editor::{EditorID, art::ArtEditor, color::ColorEditor};
+use rfd::FileDialog;
 use crate::editor::Editor;
 
 fn main() {
@@ -18,6 +18,7 @@ fn main() {
         .resizable()
         .build();
 
+    rl.set_exit_key(None);
     rl.maximize_window();
 
     unsafe {
@@ -30,11 +31,36 @@ fn main() {
     let mut color_editor = ColorEditor::new(&mut rl, &thread, &brush);
     let mut current_editor = EditorID::Art;
     let mut frame = Frame::new(&mut rl, &thread);
+    let mut current_path = None;
 
     art_editor.set_pan(Vector2::new(0.0, ColorEditor::HEIGHT as f32));
 
     while !rl.window_should_close() {
         rl.poll_input_events();
+
+        if rl.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) || rl.is_key_down(KeyboardKey::KEY_RIGHT_CONTROL) {
+            if rl.is_key_pressed(KeyboardKey::KEY_S) {
+                if current_path.is_none() || (rl.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) || rl.is_key_down(KeyboardKey::KEY_RIGHT_SHIFT)) {
+                    current_path = FileDialog::new()
+                        .set_can_create_directories(true)
+                        .add_filter("image", &["png"])
+                        .set_file_name("image.png")
+                        .save_file();
+                }
+
+                if let Some(path) = &current_path {
+                    art_editor.save(&mut rl, &thread, path).unwrap();
+                }
+            } else if rl.is_key_pressed(KeyboardKey::KEY_O) {
+                let load_path = FileDialog::new()
+                    .add_filter("image", &["png"])
+                    .pick_file();
+
+                if let Some(path) = &load_path {
+                    art_editor.import(&mut rl, &thread, path).unwrap();
+                }
+            }
+        }
 
         let mouse_pos = rl.get_mouse_position();
 
@@ -63,6 +89,11 @@ fn main() {
         art_editor.update(&mut rl, &thread, &mut brush, art_viewport, &mut frame, current_editor == EditorID::Art);
 
         if frame.is_dirty() {
+            #[cfg(debug_assertions)] {
+                let mut d = frame.begin_drawing(&mut rl, &thread);
+                d.draw_rectangle(0, 0, 60, 10, Color::BLACK);
+                d.draw_text(&d.get_time().to_string(), 0, 0, 10, Color::MAGENTA);
+            }
             frame.present(&mut rl.begin_drawing(&thread));
             rl.swap_screen_buffer();
         }
